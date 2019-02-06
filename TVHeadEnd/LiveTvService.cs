@@ -36,7 +36,7 @@ namespace TVHeadEnd
         private volatile int _subscriptionId = 0;
 
         private readonly ILogger _logger;
-        public DateTime LastRecordingChange = DateTime.MinValue;
+        public DateTimeOffset LastRecordingChange = DateTimeOffset.MinValue;
 
         public LiveTvService(ILogger logger, IMediaEncoder mediaEncoder)
         {
@@ -115,7 +115,7 @@ namespace TVHeadEnd
             {
                 LoopBackResponseHandler lbrh = new LoopBackResponseHandler();
                 _htsConnectionHandler.SendMessage(deleteAutorecMessage, lbrh);
-                LastRecordingChange = DateTime.UtcNow;
+                LastRecordingChange = DateTimeOffset.UtcNow;
                 return lbrh.getResponse();
             }));
 
@@ -159,7 +159,7 @@ namespace TVHeadEnd
             {
                 LoopBackResponseHandler lbrh = new LoopBackResponseHandler();
                 _htsConnectionHandler.SendMessage(cancelTimerMessage, lbrh);
-                LastRecordingChange = DateTime.UtcNow;
+                LastRecordingChange = DateTimeOffset.UtcNow;
                 return lbrh.getResponse();
             }));
 
@@ -290,8 +290,8 @@ namespace TVHeadEnd
             HTSMessage createTimerMessage = new HTSMessage();
             createTimerMessage.Method = "addDvrEntry";
             createTimerMessage.putField("channelId", info.ChannelId);
-            createTimerMessage.putField("start", DateTimeHelper.getUnixUTCTimeFromUtcDateTime(info.StartDate));
-            createTimerMessage.putField("stop", DateTimeHelper.getUnixUTCTimeFromUtcDateTime(info.EndDate));
+            createTimerMessage.putField("start", info.StartDate.ToUnixTimeSeconds());
+            createTimerMessage.putField("stop", info.EndDate.ToUnixTimeSeconds());
             createTimerMessage.putField("startExtra", (long)(info.PrePaddingSeconds / 60));
             createTimerMessage.putField("stopExtra", (long)(info.PostPaddingSeconds / 60));
             createTimerMessage.putField("priority", _htsConnectionHandler.GetPriority()); // info.Priority delivers always 0 - no GUI
@@ -348,7 +348,7 @@ namespace TVHeadEnd
             {
                 LoopBackResponseHandler lbrh = new LoopBackResponseHandler();
                 _htsConnectionHandler.SendMessage(deleteRecordingMessage, lbrh);
-                LastRecordingChange = DateTime.UtcNow;
+                LastRecordingChange = DateTimeOffset.UtcNow;
                 return lbrh.getResponse();
             }));
 
@@ -533,7 +533,7 @@ namespace TVHeadEnd
             throw new NotImplementedException();
         }
 
-        public async Task<IEnumerable<ProgramInfo>> GetProgramsAsync(string channelId, DateTime startDateUtc, DateTime endDateUtc, CancellationToken cancellationToken)
+        public async Task<IEnumerable<ProgramInfo>> GetProgramsAsync(string channelId, DateTimeOffset startDateUtc, DateTimeOffset endDateUtc, CancellationToken cancellationToken)
         {
             int timeOut = await WaitForInitialLoadTask(cancellationToken);
             if (timeOut == -1 || cancellationToken.IsCancellationRequested)
@@ -547,7 +547,7 @@ namespace TVHeadEnd
             HTSMessage queryEvents = new HTSMessage();
             queryEvents.Method = "getEvents";
             queryEvents.putField("channelId", Convert.ToInt32(channelId));          
-            queryEvents.putField("maxTime", ((DateTimeOffset)endDateUtc).ToUnixTimeSeconds());
+            queryEvents.putField("maxTime", (endDateUtc).ToUnixTimeSeconds());
             _htsConnectionHandler.SendMessage(queryEvents, currGetEventsResponseHandler);
 
             _logger.Info("[TVHclient] GetProgramsAsync, ask TVH for events of channel '" + channelId + "'.");
@@ -603,50 +603,6 @@ namespace TVHeadEnd
         private void LogStringList(List<String> theList, String prefix)
         {
             theList.ForEach(delegate(String s) { _logger.Info(prefix + s); });
-        }
-
-        private void LogMediaStreamList(List<MediaStream> theList, String prefix)
-        {
-            theList.ForEach(delegate (MediaStream ms) { LogMediaStream(ms, prefix); });
-        }
-
-        private void LogMediaStream(MediaStream ms, String prefix)
-        {
-            _logger.Info(prefix + "AspectRatio             " + ms.AspectRatio);
-            _logger.Info(prefix + "AverageFrameRate        " + ms.AverageFrameRate);
-            _logger.Info(prefix + "BitDepth                " + ms.BitDepth);
-            _logger.Info(prefix + "BitRate                 " + ms.BitRate);
-            _logger.Info(prefix + "ChannelLayout           " + ms.ChannelLayout); // Object
-            _logger.Info(prefix + "Channels                " + ms.Channels);
-            _logger.Info(prefix + "Codec                   " + ms.Codec); // Object
-            _logger.Info(prefix + "CodecTag                " + ms.CodecTag); // Object
-            _logger.Info(prefix + "Comment                 " + ms.Comment);
-            _logger.Info(prefix + "DeliveryMethod          " + ms.DeliveryMethod); // Object
-            _logger.Info(prefix + "DeliveryUrl             " + ms.DeliveryUrl);
-            _logger.Info(prefix + "ExternalId              " + ms.ExternalId);
-            _logger.Info(prefix + "Height                  " + ms.Height);
-            _logger.Info(prefix + "Index                   " + ms.Index);
-            _logger.Info(prefix + "IsAnamorphic            " + ms.IsAnamorphic);
-            _logger.Info(prefix + "IsDefault               " + ms.IsDefault);
-            _logger.Info(prefix + "IsExternal              " + ms.IsExternal);
-            _logger.Info(prefix + "IsExternalUrl           " + ms.IsExternalUrl);
-            _logger.Info(prefix + "IsForced                " + ms.IsForced);
-            _logger.Info(prefix + "IsInterlaced            " + ms.IsInterlaced);
-            _logger.Info(prefix + "IsTextSubtitleStream    " + ms.IsTextSubtitleStream);
-            _logger.Info(prefix + "Language                " + ms.Language);
-            _logger.Info(prefix + "Level                   " + ms.Level);
-            _logger.Info(prefix + "PacketLength            " + ms.PacketLength);
-            _logger.Info(prefix + "Path                    " + ms.Path);
-            _logger.Info(prefix + "PixelFormat             " + ms.PixelFormat);
-            _logger.Info(prefix + "Profile                 " + ms.Profile);
-            _logger.Info(prefix + "RealFrameRate           " + ms.RealFrameRate);
-            _logger.Info(prefix + "RefFrames               " + ms.RefFrames);
-            _logger.Info(prefix + "SampleRate              " + ms.SampleRate);
-            _logger.Info(prefix + "Score                   " + ms.Score);
-            _logger.Info(prefix + "SupportsExternalStream  " + ms.SupportsExternalStream);
-            _logger.Info(prefix + "Type                    " + ms.Type); // Object
-            _logger.Info(prefix + "Width                   " + ms.Width);
-            _logger.Info(prefix + "========================");
         }
 
         public async Task<MediaSourceInfo> GetRecordingStream(string recordingId, string mediaSourceId, CancellationToken cancellationToken)
@@ -854,7 +810,7 @@ namespace TVHeadEnd
         public async Task UpdateSeriesTimerAsync(SeriesTimerInfo info, CancellationToken cancellationToken)
         {
             await CancelSeriesTimerAsync(info.Id, cancellationToken);
-            LastRecordingChange = DateTime.UtcNow;
+            LastRecordingChange = DateTimeOffset.UtcNow;
             // TODO add if method is implemented 
             // await CreateSeriesTimerAsync(info, cancellationToken);
         }
@@ -879,7 +835,7 @@ namespace TVHeadEnd
             {
                 LoopBackResponseHandler lbrh = new LoopBackResponseHandler();
                 _htsConnectionHandler.SendMessage(updateTimerMessage, lbrh);
-                LastRecordingChange = DateTime.UtcNow;
+                LastRecordingChange = DateTimeOffset.UtcNow;
                 return lbrh.getResponse();
             }));
 
