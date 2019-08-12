@@ -126,8 +126,8 @@
                     $('#txtPriority', page).val(config.Priority || "5");
                     $('#txtProfile', page).val(config.Profile || "");
                     $('#selChannelType', page).val(config.ChannelType || "Ignore");
-                    $('#chkEnableSubsMaudios', page).checked(config.EnableSubsMaudios || false).checkboxradio("refresh");
-                    $('#chkForceDeinterlace', page).checked(config.ForceDeinterlace || false).checkboxradio("refresh");
+                    page.querySelector('#chkEnableSubsMaudios').checked=config.EnableSubsMaudios || false;
+                    page.querySelector('#chkForceDeinterlace').checked=config.ForceDeinterlace || false;
                     Dashboard.hideLoadingMsg();
                 });
             });
@@ -145,8 +145,8 @@
                     config.Priority = $('#txtPriority', form).val();
                     config.Profile = $('#txtProfile', form).val();
                     config.ChannelType = $('#selChannelType', form).val();
-                    config.EnableSubsMaudios = $('#chkEnableSubsMaudios', form).checked();
-                    config.ForceDeinterlace = $('#chkForceDeinterlace', form).checked();
+                    config.EnableSubsMaudios = form.querySelector('#chkEnableSubsMaudios').checked;
+                    config.ForceDeinterlace = form.querySelector('#chkForceDeinterlace').checked;
                     ApiClient.updatePluginConfiguration(TVHclientConfigurationPageVar.pluginUniqueId, config).then(Dashboard.processPluginConfigurationUpdateResult);
                 });
                 // Disable default form submission
