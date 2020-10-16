@@ -35,7 +35,7 @@ namespace TVHeadEnd.HTSP_Responses
 
         public void handleResponse(HTSMessage response)
         {
-            _logger.Info("[TVHclient] GetEventsResponseHandler.handleResponse: received answer from TVH server\n" + response.ToString()); 
+            //logger.Info("[TVHclient] GetEventsResponseHandler.handleResponse: received answer from TVH server\n" + response.ToString()); 
 
             if (response.containsField("events"))
             {
@@ -721,7 +721,7 @@ namespace TVHeadEnd.HTSP_Responses
                     //pi.Audio - MediaBrowser.Model.LiveTv.ProgramAudio
                     //pi.ProductionYear - int
 
-                    _logger.Info("[TVHclient] GetEventsResponseHandler.handleResponse: add event\n" + currEventMessage.ToString() + "\n" + createPiInfo(pi));
+                    //_logger.Info("[TVHclient] GetEventsResponseHandler.handleResponse: add event\n" + currEventMessage.ToString() + "\n" + createPiInfo(pi));
 
                     _result.Add(pi);
                 }
