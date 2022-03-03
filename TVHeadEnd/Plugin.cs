@@ -4,34 +4,18 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
-using TVHeadEnd.Configuration;
 using System.IO;
 using MediaBrowser.Model.Drawing;
+using System.Linq;
 
 namespace TVHeadEnd
 {
     /// <summary>
     /// Class Plugin
     /// </summary>
-    public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHasThumbImage
+    public class Plugin : BasePlugin, IHasWebPages, IHasThumbImage, IHasTranslations
     {
-        public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
-            : base(applicationPaths, xmlSerializer)
-        {
-            Instance = this;
-        }
-
-        public IEnumerable<PluginPageInfo> GetPages()
-        {
-            return new[]
-            {
-                new PluginPageInfo
-                {
-                    Name = Name,
-                    EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html"
-                }
-            };
-        }
+        public static string StaticName = "Tvheadend";
 
         /// <summary>
         /// Gets the name of the plugin
@@ -39,7 +23,7 @@ namespace TVHeadEnd
         /// <value>The name.</value>
         public override string Name
         {
-            get { return "TVHclient"; }
+            get { return StaticName; }
         }
 
         /// <summary>
@@ -60,10 +44,43 @@ namespace TVHeadEnd
             get { return _id; }
         }
 
+        public IEnumerable<PluginPageInfo> GetPages()
+        {
+            return new PluginPageInfo[]
+            {
+                new PluginPageInfo
+                {
+                    Name = "tvheadend",
+                    EmbeddedResourcePath = GetType().Namespace + ".web.tvheadend.html",
+                    IsMainConfigPage = false
+                },
+                new PluginPageInfo
+                {
+                    Name = "tvheadendjs",
+                    EmbeddedResourcePath = GetType().Namespace + ".web.tvheadend.js"
+                }
+            };
+        }
+
+        public TranslationInfo[] GetTranslations()
+        {
+            var basePath = GetType().Namespace + ".strings.";
+
+            return GetType()
+                .Assembly
+                .GetManifestResourceNames()
+                .Where(i => i.StartsWith(basePath, StringComparison.OrdinalIgnoreCase))
+                .Select(i => new TranslationInfo
+                {
+                    Locale = Path.GetFileNameWithoutExtension(i.Substring(basePath.Length)),
+                    EmbeddedResourcePath = i
+
+                }).ToArray();
+        }
         public Stream GetThumbImage()
         {
             var type = GetType();
-            return type.Assembly.GetManifestResourceStream(type.Namespace + ".Images.TVHeadEnd.png");
+            return type.Assembly.GetManifestResourceStream(type.Namespace + ".Images.thumb.png");
         }
 
         public ImageFormat ThumbImageFormat
@@ -73,12 +90,6 @@ namespace TVHeadEnd
                 return ImageFormat.Png;
             }
         }
-
-        /// <summary>
-        /// Gets the instance.
-        /// </summary>
-        /// <value>The instance.</value>
-        public static Plugin Instance { get; private set; }
     }
-    
+
 }

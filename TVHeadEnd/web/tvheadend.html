@@ -1,0 +1,46 @@
+﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-mousewheel="true" data-horizontal="false" data-centerfocus="card" data-controller="__plugin/tvheadendjs" data-title="${HeaderTVSourceSetup}">
+    <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page settingsContainer">
+        <form class="auto-center">
+            <div class="verticalSection">
+
+                <div>
+                    <h3 class="typeName">Tvheadend</h3>
+                </div>
+
+                <div class="inputContainer fldPath">
+                    <div class="flex align-items-center">
+                        <div class="flex-grow">
+                            <input is="emby-input" type="text" class="txtDevicePath" label="Tvheadend Web Interface Url:" required="required" autocomplete="off" />
+                            <div class="fieldDescription">
+                                For example: http://localhost:9981
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="inputContainer fldFriendlyName hide">
+                    <input is="emby-input" type="text" class="txtFriendlyName" label="${LabelFriendlyName}" autocomplete="off" />
+                </div>
+
+                <div class="inputContainer">
+                    <input is="emby-input" class="txtStreamingPort" type="text" label="HTSP port:" required="required" />
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" class="txtWebInterfaceUsername" type="text" label="Tvheadend username:" required="required" />
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" class="txtWebInterfacePassword" type="text" label="Tvheadend password:" required="required" />
+                </div>
+            </div>
+
+            <div>
+                <button is="emby-button" type="submit" class="raised button-submit block">
+                    <span>${Save}</span>
+                </button>
+                <button is="emby-button" type="button" class="raised button-cancel block btnCancel">
+                    <span>${Cancel}</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

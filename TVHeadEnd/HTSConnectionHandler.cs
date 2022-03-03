@@ -17,40 +17,27 @@ namespace TVHeadEnd
 {
     class HTSConnectionHandler : HTSConnectionListener
     {
-        private static volatile HTSConnectionHandler _instance;
-        private static object _syncRoot = new Object();
-
-        private readonly object _lock = new Object();
-
         private readonly ILogger _logger;
 
-        private volatile Boolean _initialLoadFinished = false;
-        private volatile Boolean _connected = false;
-
         private HTSConnectionAsync _htsConnection;
-        private int _priority;
-        private string _profile;
         private string _httpBaseUrl;
-        private string _channelType;
         private string _tvhServerName;
-        private int _httpPort;
         private int _htspPort;
-        private string _webRoot;
         private string _userName;
         private string _password;
-        private bool _enableSubsMaudios;
-        private bool _forceDeinterlace;
 
         // Data helpers
         private readonly ChannelDataHelper _channelDataHelper;
-        private readonly DvrDataHelper _dvrDataHelper;
-        private readonly AutorecDataHelper _autorecDataHelper;
-
-        private LiveTvService _liveTvService;
 
         private Dictionary<string, string> _headers = new Dictionary<string, string>();
 
-        private HTSConnectionHandler(ILogger logger)
+        private List<TaskCompletionSource<bool>> connectionOpenListeners = new List<TaskCompletionSource<bool>>();
+
+        private bool _connected;
+
+        private SemaphoreSlim ConnectionSemaphore = new SemaphoreSlim(1, 1);
+
+        public HTSConnectionHandler(ILogger logger, string baseUrl, TvHeadEndProviderOptions config)
         {
             _logger = logger;
 
@@ -58,235 +45,25 @@ namespace TVHeadEnd
             _logger.Info("[TVHclient] HTSConnectionHandler()");
 
             _channelDataHelper = new ChannelDataHelper(logger);
-            _dvrDataHelper = new DvrDataHelper(logger);
-            _autorecDataHelper = new AutorecDataHelper(logger);
 
-            init();
-
-            _channelDataHelper.SetChannelType4Other(_channelType);
+            init(baseUrl, config);
         }
 
-        public static HTSConnectionHandler GetInstance(ILogger logger)
+        private void init(string baseUrl, TvHeadEndProviderOptions config)
         {
-            if (_instance == null)
-            {
-                lock (_syncRoot)
-                {
-                    if (_instance == null)
-                    {
-                        _instance = new HTSConnectionHandler(logger);
-                    }
-                }
-            }
-            return _instance;
-        }
+            Uri uri = new Uri(baseUrl);
 
-        public void setLiveTvService(LiveTvService liveTvService)
-        {
-            _liveTvService = liveTvService;
-        }
-
-        public int WaitForInitialLoad(CancellationToken cancellationToken)
-        {
-            ensureConnection();
-            var start = DateTimeOffset.Now;
-            while (!_initialLoadFinished || cancellationToken.IsCancellationRequested)
-            {
-                Thread.Sleep(500);
-                TimeSpan duration = DateTimeOffset.Now - start;
-                long durationInSec = duration.Ticks / TimeSpan.TicksPerSecond;
-                if (durationInSec > 60 * 15) // 15 Min timeout, should be enough to load huge data count
-                {
-                    return -1;
-                }
-            }
-            return 0;
-        }
-
-        private void init()
-        {
-            var config = Plugin.Instance.Configuration;
-
-            if (string.IsNullOrEmpty(config.TVH_ServerName))
-            {
-                string message = "[TVHclient] HTSConnectionHandler.ensureConnection: TVH-Server name must be configured.";
-                _logger.Error(message);
-                throw new InvalidOperationException(message);
-            }
-
-            if (string.IsNullOrEmpty(config.Username))
-            {
-                string message = "[TVHclient] HTSConnectionHandler.ensureConnection: Username must be configured.";
-                _logger.Error(message);
-                throw new InvalidOperationException(message);
-            }
-
-            if (string.IsNullOrEmpty(config.Password))
-            {
-                string message = "[TVHclient] HTSConnectionHandler.ensureConnection: Password must be configured.";
-                _logger.Error(message);
-                throw new InvalidOperationException(message);
-            }
-
-            _priority = config.Priority;
-            _profile = config.Profile.Trim();
-            _channelType = config.ChannelType.Trim();
-            _enableSubsMaudios = config.EnableSubsMaudios;
-            _forceDeinterlace = config.ForceDeinterlace;
-
-            if (_priority < 0 || _priority > 4)
-            {
-                _priority = 2;
-                _logger.Info("[TVHclient] HTSConnectionHandler.ensureConnection: Priority was out of range [0-4] - set to 2");
-            }
-
-            _tvhServerName = config.TVH_ServerName.Trim();
-            _httpPort = config.HTTP_Port;
+            _tvhServerName = uri.Host;
             _htspPort = config.HTSP_Port;
-            _webRoot = config.WebRoot;
-            if (_webRoot.EndsWith("/"))
-            {
-                _webRoot = _webRoot.Substring(0, _webRoot.Length - 1);
-            }
-            _userName = config.Username.Trim();
-            _password = config.Password.Trim();
 
-            if (_enableSubsMaudios)
-            {
-                // Use HTTP basic auth instead of TVH ticketing system for authentication to allow the users to switch subs or audio tracks at any time
-                _httpBaseUrl = "http://" + _userName + ":" + _password + "@" + _tvhServerName + ":" + _httpPort + _webRoot;
-            }
-            else
-            {
-                _httpBaseUrl = "http://" + _tvhServerName + ":" + _httpPort + _webRoot;
-            }
+            _userName = (config.Username ?? "").Trim();
+            _password = (config.Password ?? "").Trim();
+
+            _httpBaseUrl = baseUrl;
 
             string authInfo = _userName + ":" + _password;
             authInfo = Convert.ToBase64String(Encoding.Default.GetBytes(authInfo));
             _headers["Authorization"] = "Basic " + authInfo;
-        }
-
-        public ImageStream GetChannelImage(string channelId, CancellationToken cancellationToken)
-        {
-            try
-            {
-                _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() channelId: " + channelId);
-
-                String channelIcon = _channelDataHelper.GetChannelIcon4ChannelId(channelId);
-
-                _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() channelIcon: " + channelIcon);
-
-                WebRequest request = null;
-
-                if (channelIcon.StartsWith("http"))
-                {
-                    request = WebRequest.Create(channelIcon);
-
-                    _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() WebRequest: " + channelIcon);
-                }
-                else
-                {
-                    string requestStr = "http://" + _tvhServerName + ":" + _httpPort + _webRoot + "/" + channelIcon;
-                    request = WebRequest.Create(requestStr);
-                    request.Headers["Authorization"] = _headers["Authorization"];
-
-                    _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() WebRequest: " + requestStr);
-                }
-
-
-                HttpWebResponse httpWebReponse = (HttpWebResponse)request.GetResponse();
-                Stream stream = httpWebReponse.GetResponseStream();
-
-                ImageStream imageStream = new ImageStream();
-
-                int lastDot = channelIcon.LastIndexOf('.');
-                if (lastDot > -1)
-                {
-                    String suffix = channelIcon.Substring(lastDot + 1);
-                    suffix = suffix.ToLower();
-
-                    _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() image suffix: " + suffix);
-
-                    switch (suffix)
-                    {
-                        case "bmp":
-                            imageStream.Stream = stream;
-                            imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Bmp;
-                            _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() using fix image type BMP.");
-                            break;
-
-                        case "gif":
-                            imageStream.Stream = stream;
-                            imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Gif;
-                            _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() using fix image type GIF.");
-                            break;
-
-                        case "jpg":
-                            imageStream.Stream = stream;
-                            imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Jpg;
-                            _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() using fix image type JPG.");
-                            break;
-
-                        case "png":
-                            imageStream.Stream = stream;
-                            imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Png;
-                            _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() using fix image type PNG.");
-                            break;
-
-                        case "webp":
-                            imageStream.Stream = stream;
-                            imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Webp;
-                            _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() using fix image type WEBP.");
-                            break;
-
-                        default:
-                            _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() unkown image type '" + suffix + "' - return as PNG");
-                            //Image image = Image.FromStream(stream);
-                            //imageStream.Stream = ImageToPNGStream(image);
-                            //imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Png;
-                            imageStream.Stream = stream;
-                            imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Png;
-                            break;
-                    }
-                }
-                else
-                {
-                    _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() no image type in suffix of channelImage name '" + channelIcon + "' found - return as PNG.");
-                    //Image image = Image.FromStream(stream);
-                    //imageStream.Stream = ImageToPNGStream(image);
-                    //imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Png;
-                    imageStream.Stream = stream;
-                    imageStream.Format = MediaBrowser.Model.Drawing.ImageFormat.Png;
-                }
-
-                return imageStream;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("[TVHclient] HTSConnectionHandler.GetChannelImage() caught exception: " + ex.Message);
-                return null;
-            }
-        }
-
-        public string GetChannelImageUrl(string channelId)
-        {
-            _logger.Info("[TVHclient] HTSConnectionHandler.GetChannelImage() channelId: " + channelId);
-
-            String channelIcon = _channelDataHelper.GetChannelIcon4ChannelId(channelId);
-
-            if (string.IsNullOrEmpty(channelIcon))
-            {
-                return null;
-            }
-
-            if (channelIcon.StartsWith("http"))
-            {
-                return _channelDataHelper.GetChannelIcon4ChannelId(channelId);
-            }
-            else
-            {
-                return "http://" + _userName + ":" + _password + "@" +_tvhServerName + ":" + _httpPort + _webRoot + "/" + channelIcon;
-            }
         }
 
         public Dictionary<string, string> GetHeaders()
@@ -294,88 +71,69 @@ namespace TVHeadEnd
             return new Dictionary<string, string>(_headers);
         }
 
-        //private static Stream ImageToPNGStream(Image image)
-        //{
-        //    Stream stream = new System.IO.MemoryStream();
-        //    image.Save(stream, ImageFormat.Png);
-        //    stream.Position = 0;
-        //    return stream;
-        //}
-
-        private void ensureConnection()
+        public async Task EnsureConnection(CancellationToken cancellationToken)
         {
-            //_logger.Info("[TVHclient] HTSConnectionHandler.ensureConnection()");
-            if (_htsConnection == null || _htsConnection.needsRestart())
-            {
-                _logger.Info("[TVHclient] HTSConnectionHandler.ensureConnection() : create new HTS-Connection");
-                Version version = Assembly.GetEntryAssembly().GetName().Version;
-                _htsConnection = new HTSConnectionAsync(this, "TVHclient4Emby-" + version.ToString(), "" + HTSMessage.HTSP_VERSION, _logger);
-                _connected = false;
-            }
+            await ConnectionSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-            lock (_lock)
+            try
             {
-                if (!_connected)
+                //_logger.Info("[TVHclient] HTSConnectionHandler.ensureConnection()");
+                if (_htsConnection == null || _htsConnection.needsRestart())
                 {
+                    _connected = false;
+
+                    _logger.Info("[TVHclient] HTSConnectionHandler.ensureConnection() : create new HTS-Connection");
+                    Version version = Assembly.GetEntryAssembly().GetName().Version;
+                    var connection = new HTSConnectionAsync(this, "TVHclient4Emby-" + version.ToString(), "" + HTSMessage.HTSP_VERSION, _logger);
+
                     _logger.Info("[TVHclient] HTSConnectionHandler.ensureConnection: Used connection parameters: " +
-                        "TVH Server = '" + _tvhServerName + "'; " +
-                        "HTTP Port = '" + _httpPort + "'; " +
+                        "TVH Server = '" + _httpBaseUrl + "'; " +
                         "HTSP Port = '" + _htspPort + "'; " +
-                        "Web-Root = '" + _webRoot + "'; " +
                         "User = '" + _userName + "'; " +
                         "Password set = '" + (_password.Length > 0) + "'");
 
-                    _htsConnection.open(_tvhServerName, _htspPort);
-                    _connected = _htsConnection.authenticate(_userName, _password);
+                    await connection.open(_tvhServerName, _htspPort, cancellationToken).ConfigureAwait(false);
+                    await connection.Authenticate(_userName, _password, cancellationToken).ConfigureAwait(false);
 
-                    _logger.Info("[TVHclient] HTSConnectionHandler.ensureConnection: connection established " + _connected);
+                    _htsConnection = connection;
                 }
+                else if (_connected)
+                {
+                    return;
+                }
+
+                var taskCompletionSource = new TaskCompletionSource<bool>();
+
+                lock (connectionOpenListeners)
+                {
+                    connectionOpenListeners.Add(taskCompletionSource);
+                }
+
+                await taskCompletionSource.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                ConnectionSemaphore.Release();
             }
         }
 
-        public void SendMessage(HTSMessage message, HTSResponseHandler responseHandler)
+        public async Task<HTSMessage> SendMessage(HTSMessage message, CancellationToken cancellationToken)
         {
-            ensureConnection();
-            _htsConnection.sendMessage(message, responseHandler);
+            await EnsureConnection(cancellationToken).ConfigureAwait(false);
+
+            return await _htsConnection.SendMessage(message, cancellationToken).ConfigureAwait(false);
         }
 
-        public String GetServername()
+        public async Task<T> SendMessage<T>(HTSMessage message, Func<HTSMessage, T> responseHandler, CancellationToken cancellationToken)
         {
-            ensureConnection();
-            return _htsConnection.getServername();
+            var response = await SendMessage(message, cancellationToken).ConfigureAwait(false);
+
+            return responseHandler(response);
         }
 
-        public String GetServerVersion()
+        public List<TvHeadEndChannelInfo> BuildChannelInfos()
         {
-            ensureConnection();
-            return _htsConnection.getServerversion();
-        }
-
-        public int GetServerProtocolVersion()
-        {
-            ensureConnection();
-            return _htsConnection.getServerProtocolVersion();
-        }
-
-        public String GetDiskSpace()
-        {
-            ensureConnection();
-            return _htsConnection.getDiskspace();
-        }
-
-        public Task<IEnumerable<ChannelInfo>> BuildChannelInfos(CancellationToken cancellationToken)
-        {
-            return _channelDataHelper.BuildChannelInfos(cancellationToken);
-        }
-
-        public int GetPriority()
-        {
-            return _priority;
-        }
-
-        public String GetProfile()
-        {
-            return _profile;
+            return _channelDataHelper.BuildChannelInfos();
         }
 
         public String GetHttpBaseUrl()
@@ -383,39 +141,29 @@ namespace TVHeadEnd
             return _httpBaseUrl;
         }
 
-        public bool GetEnableSubsMaudios()
-        {
-            return _enableSubsMaudios;
-        }
-
-        public bool GetForceDeinterlace()
-        {
-            return _forceDeinterlace;
-        }
-
-        public Task<IEnumerable<MyRecordingInfo>> BuildDvrInfos(CancellationToken cancellationToken)
-        {
-            return _dvrDataHelper.buildDvrInfos(cancellationToken);
-        }
-
-        public Task<IEnumerable<SeriesTimerInfo>> BuildAutorecInfos(CancellationToken cancellationToken)
-        {
-            return _autorecDataHelper.buildAutorecInfos(cancellationToken);
-        }
-
-        public Task<IEnumerable<TimerInfo>> BuildPendingTimersInfos(CancellationToken cancellationToken)
-        {
-            return _dvrDataHelper.buildPendingTimersInfos(cancellationToken);
-        }
-
         public void onError(Exception ex)
         {
             _logger.ErrorException("[TVHclient] HTSConnectionHandler recorded a HTSP error: " + ex.Message, ex);
             _htsConnection.stop();
             _htsConnection = null;
-            _connected = false;
-            //_liveTvService.sendDataSourceChanged();
-            ensureConnection();
+        }
+
+        private void OnInitialDataLoadComplete()
+        {
+            _connected = true;
+
+            var list = new List<TaskCompletionSource<bool>>();
+
+            lock (connectionOpenListeners)
+            {
+                list.AddRange(connectionOpenListeners);
+                connectionOpenListeners.Clear();
+            }
+
+            foreach (var t in list)
+            {
+                t.TrySetResult(true);
+            }
         }
 
         public void onMessage(HTSMessage response)
@@ -433,26 +181,6 @@ namespace TVHeadEnd
                     case "channelAdd":
                     case "channelUpdate":
                         _channelDataHelper.Add(response);
-                        break;
-
-                    case "dvrEntryAdd":
-                        _dvrDataHelper.dvrEntryAdd(response);
-                        break;
-                    case "dvrEntryUpdate":
-                        _dvrDataHelper.dvrEntryUpdate(response);
-                        break;
-                    case "dvrEntryDelete":
-                        _dvrDataHelper.dvrEntryDelete(response);
-                        break;
-
-                    case "autorecEntryAdd":
-                        _autorecDataHelper.autorecEntryAdd(response);
-                        break;
-                    case "autorecEntryUpdate":
-                        _autorecDataHelper.autorecEntryUpdate(response);
-                        break;
-                    case "autorecEntryDelete":
-                        _autorecDataHelper.autorecEntryDelete(response);
                         break;
 
                     case "eventAdd":
@@ -487,7 +215,7 @@ namespace TVHeadEnd
                     //    break;
 
                     case "initialSyncCompleted":
-                        _initialLoadFinished = true;
+                        OnInitialDataLoadComplete();
                         break;
 
                     default:

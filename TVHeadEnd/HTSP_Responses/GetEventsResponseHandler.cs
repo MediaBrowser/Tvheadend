@@ -10,32 +10,25 @@ using TVHeadEnd.HTSP;
 
 namespace TVHeadEnd.HTSP_Responses
 {
-    public class GetEventsResponseHandler : HTSResponseHandler
+    public class GetEventsResponseHandler
     {
-        private volatile Boolean _dataReady = false;
-
         private readonly DateTimeOffset _initialDateTimeUTC = new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
         private readonly DateTimeOffset _startDateTimeUtc, _endDateTimeUtc;
         private readonly ILogger _logger;
-        private readonly CancellationToken _cancellationToken;
 
-        private readonly List<ProgramInfo> _result;
-
-        public GetEventsResponseHandler(DateTimeOffset startDateTimeUtc, DateTimeOffset endDateTimeUtc, ILogger logger, CancellationToken cancellationToken)
+        public GetEventsResponseHandler(DateTimeOffset startDateTimeUtc, DateTimeOffset endDateTimeUtc, ILogger logger)
         {
             _startDateTimeUtc = startDateTimeUtc;
             _endDateTimeUtc = endDateTimeUtc;
 
             _logger = logger;
-            _cancellationToken = cancellationToken;
-
-            _result = new List<ProgramInfo>();
         }
 
-        public void handleResponse(HTSMessage response)
+        public List<ProgramInfo> GetResponse(HTSMessage response)
         {
             //logger.Info("[TVHclient] GetEventsResponseHandler.handleResponse: received answer from TVH server\n" + response.ToString()); 
+            var result = new List<ProgramInfo>();
 
             if (response.containsField("events"))
             {
@@ -51,7 +44,7 @@ namespace TVHeadEnd.HTSP_Responses
                         int compResult = DateTimeOffset.Compare(currentStartDateTimeUTC, _endDateTimeUtc);
                         if (compResult > 0)
                         {
-                            _logger.Info("[TVHclient] GetEventsResponseHandler.handleResponse: start value of event larger query stop value - skipping! \n" 
+                            _logger.Info("[TVHclient] GetEventsResponseHandler.handleResponse: start value of event larger query stop value - skipping! \n"
                                 + "Query start UTC dateTime: " + _startDateTimeUtc + "\n"
                                 + "Query end UTC dateTime:   " + _endDateTimeUtc + "\n"
                                 + "Event start UTC dateTime: " + currentStartDateTimeUTC + "\n"
@@ -723,54 +716,10 @@ namespace TVHeadEnd.HTSP_Responses
 
                     //_logger.Info("[TVHclient] GetEventsResponseHandler.handleResponse: add event\n" + currEventMessage.ToString() + "\n" + createPiInfo(pi));
 
-                    _result.Add(pi);
+                    result.Add(pi);
                 }
             }
-            _dataReady = true;
-        }
-
-        private String createPiInfo(ProgramInfo pi)
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("\n<ProgramInfo>\n");
-            sb.Append("  Id:                    " + pi.Id + "\n");
-            sb.Append("  StartDate:             " + pi.StartDate + "\n");
-            sb.Append("  EndDate:               " + pi.EndDate + "\n");
-            sb.Append("  ChannelId:             " + pi.ChannelId + "\n");
-            sb.Append("  Name:                  " + pi.Name + "\n");
-            sb.Append("  Overview:              " + pi.Overview + "\n");
-            sb.Append("  EpisodeTitle:          " + pi.EpisodeTitle + "\n");
-            sb.Append("  OriginalAirDate:       " + pi.OriginalAirDate + "\n");
-            sb.Append("  OfficialRating:        " + pi.OfficialRating + "\n");
-            sb.Append("  HasImage:              " + pi.HasImage + "\n");
-            sb.Append("  ImageUrl:              " + pi.ImageUrl + "\n");
-            sb.Append("  IsMovie:               " + pi.IsMovie + "\n");
-            sb.Append("  IsKids:                " + pi.IsKids + "\n");
-            sb.Append("  IsLive:                " + pi.IsLive + "\n");
-            sb.Append("  IsNews:                " + pi.IsNews + "\n");
-            sb.Append("  IsSports:              " + pi.IsSports + "\n");
-            sb.Append("  Genres:\n");
-            List<string> genres = pi.Genres;
-            foreach(string currGenres in genres)
-            {
-              sb.Append("  --> " + currGenres + "\n");
-            }
-            sb.Append("\n");
-
-            return sb.ToString();
-        }
-
-        public Task<IEnumerable<ProgramInfo>> GetEvents(CancellationToken cancellationToken, string channelId)
-        {
-            return Task.Factory.StartNew<IEnumerable<ProgramInfo>>(() =>
-            {
-                while (!_dataReady || cancellationToken.IsCancellationRequested)
-                {
-                    Thread.Sleep(500);
-                }
-                //_logger.Info("[TVHclient] GetEventsResponseHandler.GetEvents: channelId=" + channelId + "  / dataReady=" + _dataReady + "  / cancellationToken.IsCancellationRequested=" + cancellationToken.IsCancellationRequested);
-                return _result;
-            });
+            return result;
         }
     }
 }
