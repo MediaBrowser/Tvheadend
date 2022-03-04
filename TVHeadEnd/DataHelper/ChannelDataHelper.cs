@@ -59,9 +59,9 @@ namespace TVHeadEnd.DataHelper
             }
         }
 
-        public List<TvHeadEndChannelInfo> BuildChannelInfos()
+        public List<ChannelInfo> BuildChannelInfos()
         {
-            var result = new List<TvHeadEndChannelInfo>();
+            var result = new List<ChannelInfo>();
 
             var allChannels = _data.ToArray();
 
@@ -71,8 +71,8 @@ namespace TVHeadEnd.DataHelper
 
                 try
                 {
-                    var ci = new TvHeadEndChannelInfo();
-                    ci.TvHeadendId = entry.Key.ToString(CultureInfo.InvariantCulture);
+                    var ci = new ChannelInfo();
+                    ci.Id = entry.Key.ToString(CultureInfo.InvariantCulture);
 
                     if (m.containsField("channelIcon"))
                     {
@@ -156,10 +156,5 @@ namespace TVHeadEnd.DataHelper
             }
             return result;
         }
-    }
-
-    public class TvHeadEndChannelInfo : ChannelInfo
-    {
-        public string TvHeadendId { get; set; }
     }
 }

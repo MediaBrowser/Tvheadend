@@ -1,4 +1,3 @@
-using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Dto;
@@ -8,42 +7,15 @@ using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.MediaInfo;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Net;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using TVHeadEnd.Helper;
 using TVHeadEnd.HTSP;
 using TVHeadEnd.HTSP_Responses;
-using System.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.IO;
-using MediaBrowser.Common.Net;
-using MediaBrowser.Controller.LiveTv;
-using MediaBrowser.Model.LiveTv;
-using System.Threading;
-using System.Reflection;
-using System.Diagnostics;
-using MediaBrowser.Model.Logging;
-using MediaBrowser.Model.Entities;
-using MediaBrowser.Controller.Channels;
-using MediaBrowser.Controller.Drawing;
-using MediaBrowser.Model.Dto;
-using System.Net;
-using System.Xml.Linq;
-using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Model.Serialization;
-using MediaBrowser.Controller.MediaEncoding;
-using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using System.Collections.Concurrent;
 
@@ -52,8 +24,6 @@ namespace TVHeadEnd
     public class LiveTvService : BaseTunerHost, ITunerHost
     {
         private readonly TimeSpan TIMEOUT = TimeSpan.FromMinutes(1);
-
-        private volatile int _subscriptionId = 0;
 
         private ConcurrentDictionary<string, HTSConnectionHandler> ConnectionHandlers = new ConcurrentDictionary<string, HTSConnectionHandler>(StringComparer.OrdinalIgnoreCase);
         private ILiveTvManager _liveTvManager;
@@ -117,7 +87,7 @@ namespace TVHeadEnd
             foreach (var channel in channels)
             {
                 channel.TunerHostId = tuner.Id;
-                channel.Id = CreateEmbyChannelId(tuner, channel.TvHeadendId);
+                channel.Id = CreateEmbyChannelId(tuner, channel.Id);
             }
 
             return channels.Cast<ChannelInfo>().ToList();
@@ -139,7 +109,7 @@ namespace TVHeadEnd
         {
             var connectionHandler = GetConnectionHandler(tuner);
 
-            var channelId = providerChannel.Id;
+            var channelId = GetTunerChannelIdFromEmbyChannelId(tuner, providerChannel.Id);
 
             HTSMessage getTicketMessage = new HTSMessage();
             getTicketMessage.Method = "getTicket";
@@ -148,15 +118,9 @@ namespace TVHeadEnd
             cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(new CancellationTokenSource(TIMEOUT).Token, cancellationToken).Token;
             var getTicketResponse = await connectionHandler.SendMessage(getTicketMessage, cancellationToken).ConfigureAwait(false);
 
-            if (_subscriptionId == int.MaxValue)
-            {
-                _subscriptionId = 0;
-            }
-            int currSubscriptionId = _subscriptionId++;
-
             var mediaSource = new MediaSourceInfo
             {
-                Id = "" + currSubscriptionId,
+                Id = "tvh_" + channelId,
                 Path = connectionHandler.GetHttpBaseUrl() + getTicketResponse.getString("path") + "?ticket=" + getTicketResponse.getString("ticket"),
                 Protocol = MediaProtocol.Http,
                 MediaStreams = new List<MediaStream>
@@ -175,15 +139,25 @@ namespace TVHeadEnd
                                     // Set the index to -1 because we don't know the exact index of the audio stream within the container
                                     Index = -1
                                 }
-                            }
+                            },
+
+                RequiresOpening = true,
+                RequiresClosing = true,
+
+                SupportsDirectPlay = false,
+                SupportsDirectStream = true,
+                SupportsTranscoding = true,
+                IsInfiniteStream = true
             };
 
             return new List<MediaSourceInfo> { mediaSource };
         }
 
-        public override Task<List<ProgramInfo>> GetProgramsAsync(TunerHostInfo tuner, string channelId, DateTimeOffset startDateUtc, DateTimeOffset endDateUtc, CancellationToken cancellationToken)
+        public override async Task<List<ProgramInfo>> GetProgramsAsync(TunerHostInfo tuner, string channelId, DateTimeOffset startDateUtc, DateTimeOffset endDateUtc, CancellationToken cancellationToken)
         {
             var connectionHandler = GetConnectionHandler(tuner);
+
+            channelId = GetTunerChannelIdFromEmbyChannelId(tuner, channelId);
 
             GetEventsResponseHandler currGetEventsResponseHandler = new GetEventsResponseHandler(startDateUtc, endDateUtc, Logger);
 
@@ -195,7 +169,15 @@ namespace TVHeadEnd
 
             Logger.Info("[TVHclient] GetProgramsAsync, ask TVH for events of channel '" + channelId + "'.");
 
-            return connectionHandler.SendMessage(queryEvents, currGetEventsResponseHandler.GetResponse, cancellationToken);
+            var list = await connectionHandler.SendMessage(queryEvents, currGetEventsResponseHandler.GetResponse, cancellationToken).ConfigureAwait(false);
+
+            foreach (var item in list)
+            {
+                item.ChannelId = channelId;
+                item.Id = GetProgramEntryId(item.ShowId, item.StartDate, item.ChannelId);
+            }
+
+            return list;
         }
 
         public override Task ValdidateOptions(TunerHostInfo tuner, CancellationToken cancellationToken)

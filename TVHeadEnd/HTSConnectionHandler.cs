@@ -51,9 +51,7 @@ namespace TVHeadEnd
 
         private void init(string baseUrl, TvHeadEndProviderOptions config)
         {
-            Uri uri = new Uri(baseUrl);
-
-            _tvhServerName = uri.Host;
+            _tvhServerName = new Uri(baseUrl).Host;
             _htspPort = config.HTSP_Port;
 
             _userName = (config.Username ?? "").Trim();
@@ -131,7 +129,7 @@ namespace TVHeadEnd
             return responseHandler(response);
         }
 
-        public List<TvHeadEndChannelInfo> BuildChannelInfos()
+        public List<ChannelInfo> BuildChannelInfos()
         {
             return _channelDataHelper.BuildChannelInfos();
         }

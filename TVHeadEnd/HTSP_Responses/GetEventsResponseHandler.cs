@@ -88,7 +88,8 @@ namespace TVHeadEnd.HTSP_Responses
 
                     if (currEventMessage.containsField("eventId"))
                     {
-                        pi.Id = "" + currEventMessage.getInt("eventId");
+                        // Id will get changed later by the outer service
+                        pi.ShowId = pi.Id = "" + currEventMessage.getInt("eventId");
                     }
 
                     if (currEventMessage.containsField("serieslinkId"))
