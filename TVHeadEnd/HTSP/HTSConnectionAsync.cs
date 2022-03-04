@@ -26,11 +26,9 @@ namespace TVHeadEnd.HTSP
 
         private Thread _receiveHandlerThread;
         private Thread _messageBuilderThread;
-        private Thread _messageDistributorThread;
 
         private CancellationTokenSource _receiveHandlerThreadTokenSource;
         private CancellationTokenSource _messageBuilderThreadTokenSource;
-        private CancellationTokenSource _messageDistributorThreadTokenSource;
 
         private Socket _socket = null;
 
@@ -48,7 +46,6 @@ namespace TVHeadEnd.HTSP
 
             _receiveHandlerThreadTokenSource = new CancellationTokenSource();
             _messageBuilderThreadTokenSource = new CancellationTokenSource();
-            _messageDistributorThreadTokenSource = new CancellationTokenSource();
         }
 
         public void stop()
@@ -62,10 +59,6 @@ namespace TVHeadEnd.HTSP
                 if (_messageBuilderThread != null && _messageBuilderThread.IsAlive)
                 {
                     _messageBuilderThreadTokenSource.Cancel();
-                }
-                if (_messageDistributorThread != null && _messageDistributorThread.IsAlive)
-                {
-                    _messageDistributorThreadTokenSource.Cancel();
                 }
             }
             catch

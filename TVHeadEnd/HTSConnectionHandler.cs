@@ -131,7 +131,15 @@ namespace TVHeadEnd
 
         public List<ChannelInfo> BuildChannelInfos()
         {
-            return _channelDataHelper.BuildChannelInfos();
+            var uri = new Uri(_httpBaseUrl);
+            var builder = new UriBuilder(uri);
+
+            builder.UserName = _userName;
+            builder.Password = _password;
+
+            var urlWithAuth = builder.ToString();
+
+            return _channelDataHelper.BuildChannelInfos(urlWithAuth);
         }
 
         public String GetHttpBaseUrl()

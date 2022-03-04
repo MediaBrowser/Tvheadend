@@ -59,7 +59,7 @@ namespace TVHeadEnd.DataHelper
             }
         }
 
-        public List<ChannelInfo> BuildChannelInfos()
+        public List<ChannelInfo> BuildChannelInfos(string baseHttpUrlWithAuth)
         {
             var result = new List<ChannelInfo>();
 
@@ -85,7 +85,7 @@ namespace TVHeadEnd.DataHelper
                         }
                         else
                         {
-                            //ci.ImageUrl = "http://" + _userName + ":" + _password + "@" + _tvhServerName + ":" + _httpPort + _webRoot + "/" + channelIcon; 
+                            ci.ImageUrl = baseHttpUrlWithAuth.TrimEnd('/') + "/" + channelIcon;
                         }
                     }
                     if (m.containsField("channelName"))
