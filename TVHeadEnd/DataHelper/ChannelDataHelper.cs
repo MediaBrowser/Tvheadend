@@ -78,7 +78,7 @@ namespace TVHeadEnd.DataHelper
                     {
                         string channelIcon = m.getString("channelIcon");
                         Uri uriResult;
-                        bool uriCheckResult = Uri.TryCreate(channelIcon, UriKind.Absolute, out uriResult) && uriResult.Scheme == Uri.UriSchemeHttp;
+                        bool uriCheckResult = Uri.TryCreate(channelIcon, UriKind.Absolute, out uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
                         if (uriCheckResult)
                         {
                             ci.ImageUrl = channelIcon;

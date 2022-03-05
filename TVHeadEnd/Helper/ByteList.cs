@@ -6,12 +6,7 @@ namespace TVHeadEnd.Helper
 {
     public class ByteList
     {
-        private readonly List<byte> _data;
-
-        public ByteList()
-        {
-            _data = new List<byte>();
-        }
+        private readonly List<byte> _data = new List<byte>();
 
         public byte[] getFromStart(int count)
         {
@@ -59,14 +54,6 @@ namespace TVHeadEnd.Helper
                 byte[] dataRange = new byte[count];
                 Array.Copy(data, 0, dataRange, 0, dataRange.Length);
                 appendAll(dataRange);
-            }
-        }
-
-        public int Count()
-        {
-            lock (_data)
-            {
-                return _data.Count;
             }
         }
     }
