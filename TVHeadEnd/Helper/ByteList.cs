@@ -34,16 +34,13 @@ namespace TVHeadEnd.Helper
             }
         }
 
-        public void appendAll(byte[] data)
+        private void appendAll(byte[] data)
         {
-            lock (_data)
+            _data.AddRange(data);
+            if (_data.Count >= 1)
             {
-                _data.AddRange(data);
-                if (_data.Count >= 1)
-                {
-                    // wake up any blocked dequeue
-                    Monitor.PulseAll(_data);
-                }
+                // wake up any blocked dequeue
+                Monitor.PulseAll(_data);
             }
         }
 
