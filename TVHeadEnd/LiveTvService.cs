@@ -12,10 +12,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using TVHeadEnd.HTSP;
 using TVHeadEnd.HTSP_Responses;
-using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Configuration;
-using MediaBrowser.Model.Serialization;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using System.Collections.Concurrent;
 
@@ -28,8 +26,8 @@ namespace TVHeadEnd
         private ConcurrentDictionary<string, HTSConnectionHandler> ConnectionHandlers = new ConcurrentDictionary<string, HTSConnectionHandler>(StringComparer.OrdinalIgnoreCase);
         private ILiveTvManager _liveTvManager;
 
-        public LiveTvService(IServerConfigurationManager config, ILogger logger, IJsonSerializer jsonSerializer, IMediaEncoder mediaEncoder, IFileSystem fileSystem, ILiveTvManager liveTvManager)
-            : base(config, logger, jsonSerializer, mediaEncoder, fileSystem)
+        public LiveTvService(ILiveTvManager liveTvManager, IServerApplicationHost appHost)
+            : base(appHost)
         {
             _liveTvManager = liveTvManager;
         }
@@ -93,18 +91,6 @@ namespace TVHeadEnd
             return channels.Cast<ChannelInfo>().ToList();
         }
 
-        protected override async Task<ILiveStream> GetChannelStream(TunerHostInfo tuner, ChannelInfo channel, string streamId, List<ILiveStream> currentLiveStreams, CancellationToken cancellationToken)
-        {
-            var mediaSources = await GetChannelStreamMediaSources(tuner, null, channel, cancellationToken).ConfigureAwait(false);
-            var mediaSource = mediaSources.FirstOrDefault();
-
-            return _liveTvManager.CreateLiveStream(new LiveStreamOptions
-            {
-                MediaSource = mediaSource,
-                TunerHost = tuner
-            });
-        }
-
         protected override async Task<List<MediaSourceInfo>> GetChannelStreamMediaSources(TunerHostInfo tuner, BaseItem dbChannnel, ChannelInfo providerChannel, CancellationToken cancellationToken)
         {
             var connectionHandler = GetConnectionHandler(tuner);
@@ -153,27 +139,25 @@ namespace TVHeadEnd
             return new List<MediaSourceInfo> { mediaSource };
         }
 
-        public override async Task<List<ProgramInfo>> GetProgramsAsync(TunerHostInfo tuner, string channelId, DateTimeOffset startDateUtc, DateTimeOffset endDateUtc, CancellationToken cancellationToken)
+        protected override async Task<List<ProgramInfo>> GetProgramsInternal(TunerHostInfo tuner, string tunerChannelId, DateTimeOffset startDateUtc, DateTimeOffset endDateUtc, CancellationToken cancellationToken)
         {
             var connectionHandler = GetConnectionHandler(tuner);
-
-            channelId = GetTunerChannelIdFromEmbyChannelId(tuner, channelId);
 
             GetEventsResponseHandler currGetEventsResponseHandler = new GetEventsResponseHandler(startDateUtc, endDateUtc, Logger);
 
             HTSMessage queryEvents = new HTSMessage();
             queryEvents.Method = "getEvents";
-            queryEvents.putField("channelId", Convert.ToInt32(channelId));
+            queryEvents.putField("channelId", Convert.ToInt32(tunerChannelId));
             queryEvents.putField("maxTime", (endDateUtc).ToUnixTimeSeconds());
             cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(new CancellationTokenSource(TIMEOUT).Token, cancellationToken).Token;
 
-            Logger.Info("[TVHclient] GetProgramsAsync, ask TVH for events of channel '" + channelId + "'.");
+            Logger.Info("[TVHclient] GetProgramsAsync, ask TVH for events of channel '" + tunerChannelId + "'.");
 
             var list = await connectionHandler.SendMessage(queryEvents, currGetEventsResponseHandler.GetResponse, cancellationToken).ConfigureAwait(false);
 
             foreach (var item in list)
             {
-                item.ChannelId = channelId;
+                item.ChannelId = tunerChannelId;
                 item.Id = GetProgramEntryId(item.ShowId, item.StartDate, item.ChannelId);
             }
 
@@ -182,6 +166,7 @@ namespace TVHeadEnd
 
         public override Task ValdidateOptions(TunerHostInfo tuner, CancellationToken cancellationToken)
         {
+            new Uri(tuner.Url);
             return Task.CompletedTask;
         }
     }
