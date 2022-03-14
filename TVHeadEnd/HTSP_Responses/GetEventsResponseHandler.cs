@@ -143,12 +143,7 @@ namespace TVHeadEnd.HTSP_Responses
 
                     if (currEventMessage.containsField("image"))
                     {
-                        pi.HasImage = true;
                         pi.ImageUrl = "" + currEventMessage.getString("image");
-                    }
-                    else
-                    {
-                        pi.HasImage = false;
                     }
 
                     if (currEventMessage.containsField("contentType"))
