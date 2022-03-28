@@ -71,11 +71,10 @@
 
                     formHelper.handleConfigurationSavedResponse();
 
-                    if (params.id) {
-                        appRouter.show(appRouter.getRouteUrl('LiveTVSetup'));
-                    } else {
-                        appRouter.show(appRouter.getRouteUrl('LiveTVSetup'));
-                    }
+                    appRouter.show(appRouter.getRouteUrl('LiveTVSetup', {
+                        SavedTunerHostId: (result || {}).Id || info.Id,
+                        IsNew: params.id == null
+                    }));
 
                 }, function () {
                     loading.hide();
