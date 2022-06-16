@@ -701,6 +701,11 @@ namespace TVHeadEnd.HTSP_Responses
                         pi.Genres = genres;
                     }
 
+                    if (!string.IsNullOrEmpty(pi.SeriesId) && !pi.IsMovie)
+                    {
+                        pi.IsSeries = true;
+                    }
+
                     //pi.IsSeries - bool
                     //pi.CommunityRating  - float
                     //pi.IsHD - bool
