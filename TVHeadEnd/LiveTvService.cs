@@ -80,6 +80,8 @@ namespace TVHeadEnd
             cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(new CancellationTokenSource(TIMEOUT).Token, cancellationToken).Token;
             await connectionHandler.EnsureConnection(cancellationToken).ConfigureAwait(false);
 
+            Logger.Info("[TVHclient] GetChannels, ask TVH channels.");
+
             var channels = connectionHandler.BuildChannelInfos();
 
             foreach (var channel in channels)

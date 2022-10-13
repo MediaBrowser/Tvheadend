@@ -47,10 +47,7 @@ namespace TVHeadEnd.DataHelper
                 }
                 else
                 {
-                    if (message.containsField("channelNumber") && message.getInt("channelNumber") > 0) // use only channels with number > 0
-                    {
-                        _data.TryAdd(channelID, message);
-                    }
+                    _data.TryAdd(channelID, message);
                 }
             }
             catch (Exception ex)
